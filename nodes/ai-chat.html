@@ -1,0 +1,466 @@
+<script type="text/javascript">
+    RED.nodes.registerType('ai-chat', {
+        category: 'AI Services',
+        color: '#20808d',
+        defaults: {
+            name: { value: "" },
+            config: { value: "", type: "ai-config" },
+            provider: { value: "perplexity" },
+            model: { value: "sonar" },
+            maxTokens: { value: 1024 },
+            temperature: { value: 0.7 },
+            systemPrompt: { value: "" },
+            webSearch: { value: true },
+            searchDomainFilter: { value: "" },
+            searchRecencyFilter: { value: "" }
+        },
+        inputs: 1,
+        outputs: 2,
+        outputLabels: ["odpoveď", "chyba"],
+        icon: "font-awesome/fa-comments",
+        label: function() {
+            const providerNames = {
+                perplexity: "Perplexity",
+                claude: "Claude",
+                gemini: "Gemini",
+                grok: "Grok",
+                deepseek: "DeepSeek",
+                openai: "OpenAI"
+            };
+            const provider = providerNames[this.provider] || this.provider;
+            return this.name || `${provider} Chat`;
+        },
+        oneditprepare: function() {
+            const node = this;
+
+            // Initialize tabs
+            const tabs = RED.tabs.create({
+                id: "node-input-tabs",
+                onchange: function(tab) {
+                    $("#node-input-tabs-content").children().hide();
+                    $("#" + tab.id).show();
+                }
+            });
+            tabs.addTab({
+                id: "ai-chat-tab-settings",
+                label: "Nastavenia"
+            });
+            tabs.addTab({
+                id: "ai-chat-tab-usage",
+                label: "Spotreba tokenov"
+            });
+
+            // Activate first tab to show settings
+            setTimeout(() => {
+                tabs.activateTab("ai-chat-tab-settings");
+            }, 0);
+
+            // Function to load and display usage stats
+            function loadUsageStats() {
+                if (!node.id) {
+                    return;
+                }
+
+                $.ajax({
+                    url: `ai-chat/${node.id}/usage`,
+                    type: 'GET',
+                    success: function(data) {
+                        if (data.success && data.usage) {
+                            const usage = data.usage;
+
+                            // Update total stats
+                            $('#total-input-tokens').text(usage.total.input.toLocaleString());
+                            $('#total-output-tokens').text(usage.total.output.toLocaleString());
+                            $('#total-all-tokens').text(usage.total.total.toLocaleString());
+                            $('#request-count').text(usage.requestCount.toLocaleString());
+
+                            // Calculate average
+                            const avgTokens = usage.requestCount > 0
+                                ? Math.round(usage.total.total / usage.requestCount)
+                                : 0;
+                            $('#avg-tokens').text(avgTokens.toLocaleString());
+
+                            // Update last request stats
+                            if (usage.lastRequest) {
+                                $('#last-input-tokens').text(usage.lastRequest.input.toLocaleString());
+                                $('#last-output-tokens').text(usage.lastRequest.output.toLocaleString());
+                                $('#last-total-tokens').text(usage.lastRequest.total.toLocaleString());
+                                $('#last-model-info').text(`${usage.lastRequest.model} (${usage.lastRequest.provider})`);
+                            } else {
+                                $('#last-input-tokens').text('-');
+                                $('#last-output-tokens').text('-');
+                                $('#last-total-tokens').text('-');
+                                $('#last-model-info').text('-');
+                            }
+                        }
+                    },
+                    error: function() {
+                        console.error('Failed to load usage stats');
+                    }
+                });
+            }
+
+            // Refresh button handler
+            $('#refresh-usage-btn').on('click', function() {
+                loadUsageStats();
+            });
+
+            // Reset button handler
+            $('#reset-usage-btn').on('click', function() {
+                if (confirm('Naozaj chcete resetovať všetky štatistiky spotreby tokenov?')) {
+                    $.ajax({
+                        url: `ai-chat/${node.id}/usage/reset`,
+                        type: 'POST',
+                        success: function(data) {
+                            if (data.success) {
+                                loadUsageStats();
+                                RED.notify('Štatistiky boli resetované', 'success');
+                            }
+                        },
+                        error: function() {
+                            RED.notify('Chyba pri resetovaní štatistík', 'error');
+                        }
+                    });
+                }
+            });
+
+            // Model options for each provider (moved before updateProviderSettings)
+            const modelOptions = {
+                perplexity: [
+                    { value: 'sonar', label: 'Sonar (Rýchly)' },
+                    { value: 'sonar-pro', label: 'Sonar Pro (Pokročilý)' },
+                    { value: 'sonar-reasoning', label: 'Sonar Reasoning' },
+                    { value: 'sonar-reasoning-pro', label: 'Sonar Reasoning Pro' },
+                    { value: 'sonar-deep-research', label: 'Sonar Deep Research' }
+                ],
+                claude: [
+                    { value: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet' },
+                    { value: 'claude-3-5-haiku-20241022', label: 'Claude 3.5 Haiku' },
+                    { value: 'claude-3-opus-20240229', label: 'Claude 3 Opus' },
+                    { value: 'claude-3-sonnet-20240229', label: 'Claude 3 Sonnet' },
+                    { value: 'claude-3-haiku-20240307', label: 'Claude 3 Haiku' }
+                ],
+                gemini: [
+                    { value: 'gemini-2.0-flash-exp', label: 'Gemini 2.0 Flash (Experimental)' },
+                    { value: 'gemini-1.5-pro-latest', label: 'Gemini 1.5 Pro' },
+                    { value: 'gemini-1.5-flash-latest', label: 'Gemini 1.5 Flash' },
+                    { value: 'gemini-1.0-pro-latest', label: 'Gemini 1.0 Pro' }
+                ],
+                grok: [
+                    { value: 'grok-3', label: 'Grok 3' },
+                    { value: 'grok-3-mini', label: 'Grok 3 Mini' },
+                    { value: 'grok-2-latest', label: 'Grok 2 (Latest)' },
+                    { value: 'grok-2-1212', label: 'Grok 2 (Dec 12)' },
+                    { value: 'grok-beta', label: 'Grok Beta' }
+                ],
+                deepseek: [
+                    { value: 'deepseek-chat', label: 'DeepSeek Chat' },
+                    { value: 'deepseek-reasoner', label: 'DeepSeek Reasoner (R1)' }
+                ],
+                openai: [
+                    { value: 'gpt-4o', label: 'GPT-4o' },
+                    { value: 'gpt-4o-mini', label: 'GPT-4o Mini' },
+                    { value: 'gpt-4-turbo', label: 'GPT-4 Turbo' },
+                    { value: 'gpt-4', label: 'GPT-4' },
+                    { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo' },
+                    { value: 'o1', label: 'O1' },
+                    { value: 'o1-mini', label: 'O1 Mini' }
+                ]
+            };
+
+            // Update models dropdown based on provider
+            function updateProviderSettings() {
+                const provider = $('#node-input-provider').val();
+                const models = modelOptions[provider] || [];
+                const currentModel = node.model;
+
+                // Update model dropdown
+                const modelSelect = $('#node-input-model');
+                modelSelect.empty();
+
+                models.forEach(model => {
+                    modelSelect.append(
+                        $('<option></option>').attr('value', model.value).text(model.label)
+                    );
+                });
+
+                // Try to preserve selected model if it exists in new provider
+                if (models.find(m => m.value === currentModel)) {
+                    modelSelect.val(currentModel);
+                } else {
+                    modelSelect.val(models[0]?.value);
+                }
+
+                // Show/hide web search options (only for Perplexity)
+                if (provider === 'perplexity') {
+                    $('#web-search-container').show();
+                } else {
+                    $('#web-search-container').hide();
+                }
+
+                // Update max tokens default based on provider
+                const maxTokensDefaults = {
+                    perplexity: 1024,
+                    claude: 4096,
+                    gemini: 8192,
+                    grok: 2048,
+                    deepseek: 4096,
+                    openai: 4096
+                };
+
+                if ($('#node-input-maxTokens').val() == '') {
+                    $('#node-input-maxTokens').val(maxTokensDefaults[provider]);
+                }
+            }
+
+            // Initialize after tabs are ready
+            setTimeout(() => {
+                updateProviderSettings();
+
+                // Update when provider changes
+                $('#node-input-provider').on('change', updateProviderSettings);
+
+                // Toggle web search options visibility
+                $('#node-input-webSearch').on('change', function() {
+                    if ($(this).is(':checked')) {
+                        $('#web-search-options').show();
+                    } else {
+                        $('#web-search-options').hide();
+                    }
+                }).trigger('change');
+            }, 10);
+
+            // Load stats when Usage tab is opened
+            tabs.on('change', function(tab) {
+                if (tab.id === 'ai-chat-tab-usage') {
+                    loadUsageStats();
+                }
+            });
+        }
+    });
+</script>
+
+<script type="text/html" data-template-name="ai-chat">
+    <div class="form-tabs-container">
+        <ul style="min-width: 600px; margin-bottom: 20px;" id="node-input-tabs"></ul>
+    </div>
+    <div id="node-input-tabs-content" style="min-height: 400px;">
+        <div id="ai-chat-tab-settings" style="display:none">
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> Názov</label>
+        <input type="text" id="node-input-name" placeholder="Názov nodu">
+    </div>
+
+    <div class="form-row">
+        <label for="node-input-config"><i class="fa fa-cog"></i> Konfigurácia</label>
+        <input type="text" id="node-input-config">
+    </div>
+
+    <div class="form-row">
+        <label for="node-input-provider"><i class="fa fa-cloud"></i> Poskytovateľ</label>
+        <select id="node-input-provider">
+            <option value="perplexity">Perplexity AI</option>
+            <option value="claude">Anthropic Claude</option>
+            <option value="gemini">Google Gemini</option>
+            <option value="grok">xAI Grok</option>
+            <option value="deepseek">DeepSeek</option>
+            <option value="openai">OpenAI (ChatGPT)</option>
+        </select>
+    </div>
+
+    <div class="form-row">
+        <label for="node-input-model"><i class="fa fa-microchip"></i> Model</label>
+        <select id="node-input-model">
+            <!-- Dynamically populated based on provider -->
+        </select>
+    </div>
+
+    <div class="form-row">
+        <label for="node-input-maxTokens"><i class="fa fa-text-width"></i> Max tokenov</label>
+        <input type="number" id="node-input-maxTokens" placeholder="1024">
+    </div>
+
+    <div class="form-row">
+        <label for="node-input-temperature"><i class="fa fa-thermometer-half"></i> Temperatura</label>
+        <input type="number" id="node-input-temperature" placeholder="0.7" step="0.1" min="0" max="2">
+    </div>
+
+    <div class="form-row">
+        <label for="node-input-systemPrompt" style="vertical-align: top;">
+            <i class="fa fa-file-text"></i> Systémový prompt
+        </label>
+        <textarea id="node-input-systemPrompt" rows="3" style="width: 70%;"
+                  placeholder="Voliteľný systémový prompt..."></textarea>
+    </div>
+
+    <div id="web-search-container">
+        <div class="form-row">
+            <label style="width: auto;">
+                <input type="checkbox" id="node-input-webSearch" style="display: inline-block; width: auto; margin-right: 5px;">
+                <i class="fa fa-search"></i> Webové vyhľadávanie
+            </label>
+        </div>
+
+        <div id="web-search-options" style="border-left: 3px solid #20808d; padding-left: 15px; margin-left: 20px; margin-bottom: 10px;">
+        <div class="form-row">
+            <label for="node-input-searchDomainFilter" style="vertical-align: top;">
+                <i class="fa fa-filter"></i> Domain Filter
+            </label>
+            <input type="text" id="node-input-searchDomainFilter" placeholder="wikipedia.org, bbc.com" style="width: 70%;">
+            <p style="font-size: 11px; color: #666; margin-left: 105px; margin-top: 3px;">
+                Čiarkami oddelený zoznam domén na vyhľadávanie
+            </p>
+        </div>
+
+        <div class="form-row">
+            <label for="node-input-searchRecencyFilter">
+                <i class="fa fa-clock-o"></i> Recency Filter
+            </label>
+            <select id="node-input-searchRecencyFilter">
+                <option value="">Žiadny filter</option>
+                <option value="day">Posledný deň</option>
+                <option value="week">Posledný týždeň</option>
+                <option value="month">Posledný mesiac</option>
+                <option value="year">Posledný rok</option>
+            </select>
+            <p style="font-size: 11px; color: #666; margin-left: 105px; margin-top: 3px;">
+                Časové obmedzenie pre výsledky vyhľadávania
+            </p>
+        </div>
+    </div>
+    </div>
+        </div>
+
+        <div id="ai-chat-tab-usage" style="display:none">
+            <div class="form-row">
+                <h3><i class="fa fa-bar-chart"></i> Spotreba tokenov</h3>
+            </div>
+
+            <div style="background: #f9f9f9; border: 1px solid #ddd; border-radius: 5px; padding: 15px; margin-bottom: 15px;">
+                <h4 style="margin-top: 0; color: #666;">Posledný request</h4>
+                <div id="last-request-stats" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
+                    <div style="padding: 10px; background: white; border-radius: 3px;">
+                        <div style="font-size: 11px; color: #666;">Input tokeny</div>
+                        <div style="font-size: 24px; font-weight: bold; color: #2196F3;" id="last-input-tokens">-</div>
+                    </div>
+                    <div style="padding: 10px; background: white; border-radius: 3px;">
+                        <div style="font-size: 11px; color: #666;">Output tokeny</div>
+                        <div style="font-size: 24px; font-weight: bold; color: #4CAF50;" id="last-output-tokens">-</div>
+                    </div>
+                    <div style="padding: 10px; background: white; border-radius: 3px; grid-column: span 2;">
+                        <div style="font-size: 11px; color: #666;">Celkom tokenov</div>
+                        <div style="font-size: 24px; font-weight: bold; color: #FF9800;" id="last-total-tokens">-</div>
+                    </div>
+                    <div style="padding: 10px; background: white; border-radius: 3px; grid-column: span 2;">
+                        <div style="font-size: 11px; color: #666;">Model / Poskytovateľ</div>
+                        <div style="font-size: 14px; font-weight: bold;" id="last-model-info">-</div>
+                    </div>
+                </div>
+            </div>
+
+            <div style="background: #f9f9f9; border: 1px solid #ddd; border-radius: 5px; padding: 15px; margin-bottom: 15px;">
+                <h4 style="margin-top: 0; color: #666;">Celková spotreba</h4>
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 10px;">
+                    <div style="padding: 10px; background: white; border-radius: 3px;">
+                        <div style="font-size: 11px; color: #666;">Input</div>
+                        <div style="font-size: 20px; font-weight: bold; color: #2196F3;" id="total-input-tokens">0</div>
+                    </div>
+                    <div style="padding: 10px; background: white; border-radius: 3px;">
+                        <div style="font-size: 11px; color: #666;">Output</div>
+                        <div style="font-size: 20px; font-weight: bold; color: #4CAF50;" id="total-output-tokens">0</div>
+                    </div>
+                    <div style="padding: 10px; background: white; border-radius: 3px;">
+                        <div style="font-size: 11px; color: #666;">Celkom</div>
+                        <div style="font-size: 20px; font-weight: bold; color: #FF9800;" id="total-all-tokens">0</div>
+                    </div>
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
+                    <div style="padding: 10px; background: white; border-radius: 3px;">
+                        <div style="font-size: 11px; color: #666;">Počet requestov</div>
+                        <div style="font-size: 18px; font-weight: bold;" id="request-count">0</div>
+                    </div>
+                    <div style="padding: 10px; background: white; border-radius: 3px;">
+                        <div style="font-size: 11px; color: #666;">Priemerné tokeny/request</div>
+                        <div style="font-size: 18px; font-weight: bold;" id="avg-tokens">0</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <button type="button" class="red-ui-button" id="refresh-usage-btn" style="margin-right: 10px;">
+                    <i class="fa fa-refresh"></i> Obnoviť
+                </button>
+                <button type="button" class="red-ui-button" id="reset-usage-btn">
+                    <i class="fa fa-trash"></i> Resetovať štatistiky
+                </button>
+            </div>
+
+            <div style="margin-top: 20px; padding: 10px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 5px;">
+                <strong><i class="fa fa-info-circle"></i> Poznámka:</strong> Štatistiky sa sledujú od posledného reštartu Node-RED alebo resetu.
+            </div>
+        </div>
+    </div>
+</script>
+
+<script type="text/html" data-help-name="ai-chat">
+    <p>Universal AI chat node with support for multiple providers: Perplexity, Claude, Gemini, Grok, DeepSeek, and OpenAI.</p>
+    <p>Univerzálny AI chat node s podporou viacerých poskytovateľov: Perplexity, Claude, Gemini, Grok, DeepSeek a OpenAI.</p>
+
+    <h3>Inputs / Vstupy:</h3>
+    <dl class="message-properties">
+        <dt>msg.payload <span class="property-type">string | array | object</span></dt>
+        <dd>Message text, array of messages, or object with messages / Text správy, pole správ alebo objekt s messages</dd>
+        <dt>msg.provider <span class="property-type">string</span> (optional / voliteľné)</dt>
+        <dd>Override provider (perplexity, claude, gemini, grok, deepseek, openai) / Prepísanie poskytovateľa</dd>
+    </dl>
+
+    <h3>Outputs / Výstupy:</h3>
+    <ol class="node-ports">
+        <li>Standard output / Štandardný výstup
+            <dl class="message-properties">
+                <dt>msg.payload <span class="property-type">string</span></dt>
+                <dd>AI model response / Odpoveď od AI modelu</dd>
+                <dt>msg.ai <span class="property-type">object</span></dt>
+                <dd>Complete API response including provider, usage, model, message history, and citations (if available) / Kompletná odpoveď API vrátane provider, usage, model, messages histórie a citations</dd>
+            </dl>
+        </li>
+        <li>Error output / Chybový výstup
+            <dl class="message-properties">
+                <dt>msg.error <span class="property-type">object</span></dt>
+                <dd>Error information / Informácie o chybe</dd>
+            </dl>
+        </li>
+    </ol>
+
+    <h3>Supported Providers / Podporovaní poskytovatelia:</h3>
+    <ul>
+        <li><strong>Perplexity AI:</strong> Sonar models with real-time web search / Sonar modely s webovým vyhľadávaním v reálnom čase</li>
+        <li><strong>Anthropic Claude:</strong> Claude 3/3.5 models with advanced reasoning / Claude 3/3.5 modely s pokročilým reasoning</li>
+        <li><strong>Google Gemini:</strong> Gemini 1.x/2.x models with multimodal capabilities / Gemini 1.x/2.x modely s multimodálnymi schopnosťami</li>
+        <li><strong>xAI Grok:</strong> Grok 2/3 models optimized for conversations / Grok 2/3 modely optimalizované pre konverzácie</li>
+        <li><strong>DeepSeek:</strong> DeepSeek Chat and Reasoner (R1) models / DeepSeek Chat a Reasoner (R1) modely</li>
+        <li><strong>OpenAI:</strong> GPT-4o, GPT-4, GPT-3.5, O1 models / GPT-4o, GPT-4, GPT-3.5, O1 modely</li>
+    </ul>
+
+    <h3>Perplexity Web Search:</h3>
+    <p>Perplexity AI supports real-time web search / Perplexity AI podporuje vyhľadávanie na webe v reálnom čase:</p>
+    <ul>
+        <li><strong>Domain Filter:</strong> Restrict search to specific domains / Obmedzte vyhľadávanie na konkrétne domény</li>
+        <li><strong>Recency Filter:</strong> Search only recent content / Vyhľadávajte len aktuálny obsah</li>
+    </ul>
+
+    <h3>Usage Examples / Príklady použitia:</h3>
+    <h4>Simple message / Jednoduchá správa:</h4>
+    <pre>msg.payload = "What are the latest AI news?";</pre>
+
+    <h4>Conversation / Konverzácia:</h4>
+    <pre>msg.payload = [
+    { role: "user", content: "Explain quantum computing to me" },
+    { role: "assistant", content: "Quantum computing is..." },
+    { role: "user", content: "What are its practical applications?" }
+];</pre>
+
+    <h4>Dynamic provider switching / Dynamické prepínanie poskytovateľa:</h4>
+    <pre>msg.provider = "claude";
+msg.payload = "Analyze this code...";</pre>
+</script>

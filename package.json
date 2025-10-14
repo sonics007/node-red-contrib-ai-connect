@@ -1,0 +1,42 @@
+{
+  "name": "@sonics007/node-red-contrib-ai-connect",
+  "version": "2.0.0",
+  "description": "Univerzálny Node-RED node pre pripojenie k AI službám - Perplexity, Claude, Gemini a Grok",
+  "main": "index.js",
+  "keywords": [
+    "node-red",
+    "ai",
+    "llm",
+    "multi-ai",
+    "perplexity",
+    "claude",
+    "gemini",
+    "grok",
+    "chatbot",
+    "anthropic",
+    "google",
+    "xai",
+    "openai-compatible",
+    "search",
+    "sonar"
+  ],
+  "node-red": {
+    "nodes": {
+      "ai-config": "nodes/ai-config.js",
+      "ai-chat": "nodes/ai-chat.js",
+      "ai-intent": "nodes/ai-intent.js"
+    }
+  },
+  "dependencies": {
+    "axios": "^1.6.0"
+  },
+  "author": "sonics007",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sonics007/node-red-contrib-ai-connect.git"
+  },
+  "bugs": {
+    "url": "https://github.com/sonics007/node-red-contrib-ai-connect/issues"
+  }
+}

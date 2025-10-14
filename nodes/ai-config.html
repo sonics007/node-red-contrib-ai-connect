@@ -1,0 +1,285 @@
+<script type="text/javascript">
+    RED.nodes.registerType('ai-config', {
+        category: 'config',
+        defaults: {
+            name: { value: "" },
+            provider: { value: "perplexity" }
+        },
+        credentials: {
+            perplexityApiKey: { type: "password" },
+            claudeApiKey: { type: "password" },
+            geminiApiKey: { type: "password" },
+            grokApiKey: { type: "password" },
+            deepseekApiKey: { type: "password" },
+            openaiApiKey: { type: "password" }
+        },
+        label: function() {
+            const providerNames = {
+                perplexity: "Perplexity",
+                claude: "Claude",
+                gemini: "Gemini",
+                grok: "Grok",
+                deepseek: "DeepSeek",
+                openai: "OpenAI"
+            };
+            const providerLabel = providerNames[this.provider] || this.provider;
+            return this.name || `${providerLabel} Config`;
+        },
+        oneditprepare: function() {
+            const node = this;
+
+            // Language detection
+            const lang = (navigator.language || navigator.userLanguage || 'en').toLowerCase();
+            const isSlovak = lang.startsWith('sk');
+
+            const i18n = {
+                pleaseEnterKey: isSlovak ? 'Prosím zadajte API kľúč' : 'Please enter API key',
+                validating: isSlovak ? 'Overujem...' : 'Validating...',
+                validKey: isSlovak ? 'API kľúč je platný' : 'API key is valid',
+                invalidKey: isSlovak ? 'Neplatný API kľúč' : 'Invalid API key',
+                validationError: isSlovak ? 'Chyba pri overovaní' : 'Validation error'
+            };
+
+            // Validate API key function
+            function validateApiKey(provider) {
+                const inputId = `node-config-input-${provider}ApiKey`;
+                const apiKey = $(`#${inputId}`).val();
+                const statusElement = $(`#${provider}-status`);
+                const btn = $(`.validate-btn[data-provider="${provider}"]`);
+
+                // Clear previous status
+                statusElement.removeClass('validation-success validation-error');
+                statusElement.html('');
+
+                if (!apiKey || apiKey.trim() === '') {
+                    statusElement.addClass('validation-error');
+                    statusElement.html(`<i class="fa fa-times-circle"></i> <span>${i18n.pleaseEnterKey}</span>`);
+                    return;
+                }
+
+                // Show loading state
+                btn.prop('disabled', true);
+                statusElement.html(`<i class="fa fa-spinner fa-spin"></i> <span>${i18n.validating}</span>`);
+
+                // Call validation endpoint
+                $.ajax({
+                    url: 'ai-config/validate-key',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({
+                        apiKey: apiKey,
+                        provider: provider
+                    }),
+                    success: function(response) {
+                        btn.prop('disabled', false);
+                        statusElement.html('');
+
+                        if (response.valid) {
+                            statusElement.addClass('validation-success');
+                            statusElement.html(`<i class="fa fa-check-circle"></i> <span>${i18n.validKey}</span>`);
+                        } else {
+                            statusElement.addClass('validation-error');
+                            statusElement.html(`<i class="fa fa-times-circle"></i> <span>${response.error || i18n.invalidKey}</span>`);
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        btn.prop('disabled', false);
+                        statusElement.addClass('validation-error');
+                        statusElement.html(`<i class="fa fa-times-circle"></i> <span>${i18n.validationError}: ${error}</span>`);
+                    }
+                });
+            }
+
+            // Add click handlers to validate buttons
+            $('.validate-btn').on('click', function() {
+                const provider = $(this).data('provider');
+                validateApiKey(provider);
+            });
+        }
+    });
+</script>
+
+<script type="text/html" data-template-name="ai-config">
+    <style>
+        .validate-btn {
+            padding: 6px 12px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            white-space: nowrap;
+            transition: background-color 0.3s;
+        }
+
+        .validate-btn:hover {
+            background-color: #45a049;
+        }
+
+        .validate-btn:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+
+        .validation-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 13px;
+            min-width: 150px;
+        }
+
+        .validation-status.validation-success {
+            color: #4CAF50;
+        }
+
+        .validation-status.validation-success i {
+            font-size: 18px;
+        }
+
+        .validation-status.validation-error {
+            color: #f44336;
+        }
+
+        .validation-status.validation-error i {
+            font-size: 18px;
+        }
+
+        .validation-status i.fa-spinner {
+            color: #2196F3;
+        }
+    </style>
+
+    <div class="form-row">
+        <label for="node-config-input-name"><i class="fa fa-tag"></i> Názov</label>
+        <input type="text" id="node-config-input-name" placeholder="Názov pripojenia">
+    </div>
+
+    <div class="form-row">
+        <label for="node-config-input-provider"><i class="fa fa-cloud"></i> Poskytovateľ</label>
+        <select id="node-config-input-provider">
+            <option value="perplexity">Perplexity AI</option>
+            <option value="claude">Anthropic Claude</option>
+            <option value="gemini">Google Gemini</option>
+            <option value="grok">xAI Grok</option>
+            <option value="deepseek">DeepSeek</option>
+            <option value="openai">OpenAI (ChatGPT)</option>
+        </select>
+    </div>
+
+    <div class="form-row">
+        <label><i class="fa fa-key"></i> API Klúče</label>
+        <div style="font-size: 12px; color: #666; margin-bottom: 10px;">
+            Zadajte API klúče pre poskytovateľov, ktorých chcete používať:
+        </div>
+    </div>
+
+    <div class="form-row api-key-row" id="perplexity-key-row">
+        <label for="node-config-input-perplexityApiKey">Perplexity</label>
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <input type="password" id="node-config-input-perplexityApiKey" placeholder="pplx-..." style="flex: 1;">
+            <button type="button" class="validate-btn" data-provider="perplexity" title="Overiť API kľúč">
+                <i class="fa fa-check-circle"></i> Overiť
+            </button>
+            <span class="validation-status" id="perplexity-status"></span>
+        </div>
+        <div style="margin-left: 105px; font-size: 11px; color: #999; margin-top: 3px;">
+            <a href="https://www.perplexity.ai/settings/api" target="_blank">Získať API kľúč</a>
+        </div>
+    </div>
+
+    <div class="form-row api-key-row" id="claude-key-row">
+        <label for="node-config-input-claudeApiKey">Claude</label>
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <input type="password" id="node-config-input-claudeApiKey" placeholder="sk-ant-..." style="flex: 1;">
+            <button type="button" class="validate-btn" data-provider="claude" title="Overiť API kľúč">
+                <i class="fa fa-check-circle"></i> Overiť
+            </button>
+            <span class="validation-status" id="claude-status"></span>
+        </div>
+        <div style="margin-left: 105px; font-size: 11px; color: #999; margin-top: 3px;">
+            <a href="https://console.anthropic.com/settings/keys" target="_blank">Získať API kľúč</a>
+        </div>
+    </div>
+
+    <div class="form-row api-key-row" id="gemini-key-row">
+        <label for="node-config-input-geminiApiKey">Gemini</label>
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <input type="password" id="node-config-input-geminiApiKey" placeholder="AIza..." style="flex: 1;">
+            <button type="button" class="validate-btn" data-provider="gemini" title="Overiť API kľúč">
+                <i class="fa fa-check-circle"></i> Overiť
+            </button>
+            <span class="validation-status" id="gemini-status"></span>
+        </div>
+        <div style="margin-left: 105px; font-size: 11px; color: #999; margin-top: 3px;">
+            <a href="https://aistudio.google.com/app/apikey" target="_blank">Získať API kľúč</a>
+        </div>
+    </div>
+
+    <div class="form-row api-key-row" id="grok-key-row">
+        <label for="node-config-input-grokApiKey">Grok</label>
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <input type="password" id="node-config-input-grokApiKey" placeholder="xai-..." style="flex: 1;">
+            <button type="button" class="validate-btn" data-provider="grok" title="Overiť API kľúč">
+                <i class="fa fa-check-circle"></i> Overiť
+            </button>
+            <span class="validation-status" id="grok-status"></span>
+        </div>
+        <div style="margin-left: 105px; font-size: 11px; color: #999; margin-top: 3px;">
+            <a href="https://console.x.ai/" target="_blank">Získať API kľúč</a> •
+            <span style="color: #ff9800; font-weight: bold;">⚠️ Platené API - vyžaduje kredity</span>
+        </div>
+    </div>
+
+    <div class="form-row api-key-row" id="deepseek-key-row">
+        <label for="node-config-input-deepseekApiKey">DeepSeek</label>
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <input type="password" id="node-config-input-deepseekApiKey" placeholder="sk-..." style="flex: 1;">
+            <button type="button" class="validate-btn" data-provider="deepseek" title="Overiť API kľúč">
+                <i class="fa fa-check-circle"></i> Overiť
+            </button>
+            <span class="validation-status" id="deepseek-status"></span>
+        </div>
+        <div style="margin-left: 105px; font-size: 11px; color: #999; margin-top: 3px;">
+            <a href="https://platform.deepseek.com/api_keys" target="_blank">Získať API kľúč</a>
+        </div>
+    </div>
+
+    <div class="form-row api-key-row" id="openai-key-row">
+        <label for="node-config-input-openaiApiKey">OpenAI</label>
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <input type="password" id="node-config-input-openaiApiKey" placeholder="sk-..." style="flex: 1;">
+            <button type="button" class="validate-btn" data-provider="openai" title="Overiť API kľúč">
+                <i class="fa fa-check-circle"></i> Overiť
+            </button>
+            <span class="validation-status" id="openai-status"></span>
+        </div>
+        <div style="margin-left: 105px; font-size: 11px; color: #999; margin-top: 3px;">
+            <a href="https://platform.openai.com/api-keys" target="_blank">Získať API kľúč</a>
+        </div>
+    </div>
+</script>
+
+<script type="text/html" data-help-name="ai-config">
+    <p>Universal configuration for connecting to various AI providers.</p>
+    <p>Univerzálna konfigurácia pre pripojenie k rôznym AI poskytovateľom.</p>
+
+    <h3>Supported Providers / Podporovaní poskytovatelia:</h3>
+    <ul>
+        <li><strong>Perplexity AI:</strong> <a href="https://www.perplexity.ai/settings/api" target="_blank">Get API Key / Získať API kľúč</a></li>
+        <li><strong>Anthropic Claude:</strong> <a href="https://console.anthropic.com/settings/keys" target="_blank">Get API Key / Získať API kľúč</a></li>
+        <li><strong>Google Gemini:</strong> <a href="https://aistudio.google.com/app/apikey" target="_blank">Get API Key / Získať API kľúč</a></li>
+        <li><strong>xAI Grok:</strong> <a href="https://console.x.ai/" target="_blank">Get API Key / Získať API kľúč</a> <span style="color: #ff9800;">⚠️ Paid API - requires credits / Platené API - vyžaduje kredity</span></li>
+        <li><strong>DeepSeek:</strong> <a href="https://platform.deepseek.com/api_keys" target="_blank">Get API Key / Získať API kľúč</a></li>
+        <li><strong>OpenAI (ChatGPT):</strong> <a href="https://platform.openai.com/api-keys" target="_blank">Get API Key / Získať API kľúč</a></li>
+    </ul>
+
+    <h3>Setup / Postup:</h3>
+    <ol>
+        <li>Select AI provider / Vyberte poskytovateľa AI služby</li>
+        <li>Click link above to get API key / Kliknite na odkaz vyššie pre získanie API kľúča</li>
+        <li>Create new API key at provider / Vytvorte nový API kľúč u vybraného poskytovateľa</li>
+        <li>Copy and paste key into field / Skopírujte kľúč a vložte ho do príslušného poľa</li>
+    </ol>
+</script>

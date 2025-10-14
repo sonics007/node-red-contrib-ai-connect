@@ -1,0 +1,169 @@
+<script type="text/javascript">
+    RED.nodes.registerType('ai-intent', {
+        category: 'Perplexity AI',
+        color: '#20808d',
+        defaults: {
+            name: { value: "" },
+            config: { value: "", type: "ai-config" },
+            model: { value: "sonar" },
+            outputType: { value: "separate" },
+            intents: { value: [] }
+        },
+        inputs: 1,
+        outputs: 1,
+        icon: "font-awesome/fa-crosshairs",
+        label: function() {
+            return this.name || "Perplexity Intent";
+        },
+        oneditprepare: function() {
+            const node = this;
+
+            $("#node-input-intent-container").css('min-height', '150px').editableList({
+                addItem: function(container, index, data) {
+                    const row = $('<div/>').appendTo(container);
+
+                    const nameInput = $('<input/>', {
+                        type: 'text',
+                        class: 'intent-name',
+                        placeholder: 'Názov intentu (napr. greeting)',
+                        style: 'width: 30%; margin-right: 5px;'
+                    }).appendTo(row);
+
+                    const descInput = $('<input/>', {
+                        type: 'text',
+                        class: 'intent-description',
+                        placeholder: 'Popis (napr. Pozdravy a uvítanie)',
+                        style: 'width: 65%;'
+                    }).appendTo(row);
+
+                    if (data.name) nameInput.val(data.name);
+                    if (data.description) descInput.val(data.description);
+                },
+                removable: true,
+                sortable: true
+            });
+
+            if (this.intents && this.intents.length > 0) {
+                this.intents.forEach(intent => {
+                    $("#node-input-intent-container").editableList('addItem', intent);
+                });
+            } else {
+                const examples = [
+                    { name: 'greeting', description: 'Pozdravy typu ahoj, dobrý deň, čau' },
+                    { name: 'question', description: 'Otázky vyžadujúce informácie' },
+                    { name: 'farewell', description: 'Rozlúčky a dovidenia' }
+                ];
+                examples.forEach(intent => {
+                    $("#node-input-intent-container").editableList('addItem', intent);
+                });
+            }
+
+            $("#node-input-outputType").on('change', function() {
+                const type = $(this).val();
+                if (type === 'separate') {
+                    $("#output-info").html(
+                        '<i class="fa fa-info-circle"></i> Každý intent bude mať vlastný výstup + jeden výstup pre neznáme intenty'
+                    );
+                } else {
+                    $("#output-info").html(
+                        '<i class="fa fa-info-circle"></i> Všetky intenty pôjdu na jeden výstup, info v msg.intent'
+                    );
+                }
+            }).trigger('change');
+        },
+        oneditsave: function() {
+            const node = this;
+            const intents = [];
+
+            $("#node-input-intent-container").editableList('items').each(function() {
+                const name = $(this).find('.intent-name').val();
+                const description = $(this).find('.intent-description').val();
+
+                if (name) {
+                    intents.push({
+                        name: name,
+                        description: description
+                    });
+                }
+            });
+
+            node.intents = intents;
+
+            if (node.outputType === 'separate') {
+                node.outputs = intents.length + 1;
+            } else {
+                node.outputs = 1;
+            }
+        }
+    });
+</script>
+
+<script type="text/html" data-template-name="ai-intent">
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> Názov</label>
+        <input type="text" id="node-input-name" placeholder="Názov nodu">
+    </div>
+
+    <div class="form-row">
+        <label for="node-input-config"><i class="fa fa-cog"></i> Konfigurácia</label>
+        <input type="text" id="node-input-config">
+    </div>
+
+    <div class="form-row">
+        <label for="node-input-model"><i class="fa fa-microchip"></i> Model</label>
+        <select id="node-input-model">
+            <option value="sonar">Sonar</option>
+            <option value="sonar-pro">Sonar Pro</option>
+        </select>
+    </div>
+
+    <div class="form-row">
+        <label for="node-input-outputType"><i class="fa fa-random"></i> Typ výstupu</label>
+        <select id="node-input-outputType">
+            <option value="separate">Separátne výstupy</option>
+            <option value="single">Jeden výstup</option>
+        </select>
+        <div id="output-info" style="margin-left: 105px; margin-top: 5px; font-size: 12px; color: #666;"></div>
+    </div>
+
+    <div class="form-row node-input-intent-container-row">
+        <label style="vertical-align: top; margin-top: 8px;">
+            <i class="fa fa-list"></i> Intenty
+        </label>
+        <ol id="node-input-intent-container"></ol>
+    </div>
+</script>
+
+<script type="text/html" data-help-name="ai-intent">
+    <p>Node na detekciu intentov (zámerov) v používateľských správach pomocou Perplexity AI.</p>
+
+    <h3>Vstup:</h3>
+    <dl class="message-properties">
+        <dt>msg.payload <span class="property-type">string</span></dt>
+        <dd>Text správy na analýzu</dd>
+    </dl>
+
+    <h3>Výstupy:</h3>
+    <h4>Režim "Separátne výstupy":</h4>
+    <p>Každý intent má vlastný výstup + posledný výstup pre neznáme intenty.</p>
+
+    <h4>Režim "Jeden výstup":</h4>
+    <dl class="message-properties">
+        <dt>msg.intent <span class="property-type">object</span></dt>
+        <dd>Informácie o detekovanom intente</dd>
+        <dd><code>matched</code> - či bol intent nájdený</dd>
+        <dd><code>name</code> - názov intentu</dd>
+        <dd><code>description</code> - popis intentu</dd>
+        <dd><code>confidence</code> - spoľahlivosť (0-1)</dd>
+    </dl>
+
+    <h3>Príklad použitia:</h3>
+    <p>Vytvor intenty ako:</p>
+    <ul>
+        <li><b>greeting:</b> Pozdravy a uvítanie</li>
+        <li><b>question:</b> Otázky na informácie</li>
+        <li><b>farewell:</b> Rozlúčky</li>
+    </ul>
+
+    <p>Node automaticky klasifikuje správu do jedného z týchto intentov pomocou Perplexity AI.</p>
+</script>

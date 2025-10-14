@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:www.perplexity.ai)",
+      "WebFetch(domain:docs.perplexity.ai)",
+      "Bash(echo \"   docker restart <container_name>\")",
+      "Bash(systemctl:*)",
+      "Bash(sudo systemctl:*)",
+      "Bash(npm install)",
+      "Read(//home/nodky/**)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
