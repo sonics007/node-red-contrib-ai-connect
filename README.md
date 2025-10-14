@@ -161,7 +161,7 @@ msg.intent = {
 ### Jednoduchý chatbot s webovým vyhľadávaním
 
 ```
-[inject] → [function] → [perplexity-chat] → [debug]
+[inject] → [function] → [ai-chat] → [debug]
 
 function node:
 msg.payload = "Aké sú najnovšie správy o AI?";
@@ -171,11 +171,11 @@ return msg;
 ### Intent-based router
 
 ```
-[inject] → [perplexity-intent] → [switch] → [function]
-                               → [switch] → [function]
-                               → [switch] → [function]
+[inject] → [ai-intent] → [switch] → [function]
+                       → [switch] → [function]
+                       → [switch] → [function]
 
-perplexity-intent nastavenie:
+ai-intent nastavenie:
 - Intenty: greeting, question, farewell
 - Typ výstupu: Separátne výstupy
 
@@ -185,9 +185,9 @@ Každý intent ide na samostatný výstup pre špecifické spracovanie.
 ### Konverzácia s históriou
 
 ```
-[inject] → [function] → [perplexity-chat] → [function] → [debug]
-              ↑                                  ↓
-              └──────────────────────────────────┘
+[inject] → [function] → [ai-chat] → [function] → [debug]
+              ↑                          ↓
+              └──────────────────────────┘
 
 function node (pred):
 msg.payload = msg.payload || [];
@@ -199,7 +199,7 @@ return msg;
 
 function node (po):
 // Uložiť históriu pre ďalšiu správu
-flow.set("messages", msg.perplexity.messages);
+flow.set("messages", msg.ai.messages);
 return msg;
 ```
 
