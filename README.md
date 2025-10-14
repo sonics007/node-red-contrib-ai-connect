@@ -330,17 +330,25 @@ Perplexity AI automaticky vyhľadáva aktuálne informácie na webe:
 
 - **Citations**: Každá odpoveď obsahuje odkazy na zdroje
 
-## Licencia
+## Licencia / License
 
-MIT
+MIT License - see [LICENSE](LICENSE) file for details
 
-## Autor
+## Autor / Author
 
 sonics007
 
-## Podpora
+## Credits / Poďakovanie
+
+This project was inspired by [@technithusiast/node-red-contrib-ai-intent](https://flows.nodered.org/node/@technithusiast/node-red-contrib-ai-intent) by [@montaque22](https://github.com/montaque22). While the original project focuses on OpenAI and Ollama integration with intent detection, this project extends the concept to support multiple AI providers (Perplexity, Claude, Gemini, Grok, DeepSeek, and OpenAI) with additional features like web search and token usage tracking.
+
+Tento projekt bol inšpirovaný [@technithusiast/node-red-contrib-ai-intent](https://flows.nodered.org/node/@technithusiast/node-red-contrib-ai-intent) od [@montaque22](https://github.com/montaque22). Zatiaľ čo originálny projekt sa zameriava na integráciu OpenAI a Ollama s detekciou intentov, tento projekt rozširuje koncept o podporu viacerých AI poskytovateľov (Perplexity, Claude, Gemini, Grok, DeepSeek a OpenAI) s dodatočnými funkciami ako webové vyhľadávanie a sledovanie spotreby tokenov.
+
+## Podpora / Support
 
 Pre problémy a feature requesty použite [GitHub Issues](https://github.com/sonics007/node-red-contrib-ai-connect/issues)
+
+For issues and feature requests use [GitHub Issues](https://github.com/sonics007/node-red-contrib-ai-connect/issues)
 
 ## Changelog
 
