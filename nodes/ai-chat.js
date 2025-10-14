@@ -318,9 +318,23 @@ module.exports = function(RED) {
 
                 // Track token usage
                 if (result.usage) {
-                    const inputTokens = result.usage.prompt_tokens || result.usage.input_tokens || 0;
-                    const outputTokens = result.usage.completion_tokens || result.usage.output_tokens || 0;
-                    const totalTokens = result.usage.total_tokens || (inputTokens + outputTokens);
+                    // Handle different token naming conventions
+                    let inputTokens = 0;
+                    let outputTokens = 0;
+                    let totalTokens = 0;
+
+                    // Gemini uses different field names
+                    if (result.usage.promptTokenCount !== undefined) {
+                        // Gemini format
+                        inputTokens = result.usage.promptTokenCount || 0;
+                        outputTokens = result.usage.candidatesTokenCount || 0;
+                        totalTokens = result.usage.totalTokenCount || (inputTokens + outputTokens);
+                    } else {
+                        // OpenAI/Claude/Perplexity format
+                        inputTokens = result.usage.prompt_tokens || result.usage.input_tokens || 0;
+                        outputTokens = result.usage.completion_tokens || result.usage.output_tokens || 0;
+                        totalTokens = result.usage.total_tokens || (inputTokens + outputTokens);
+                    }
 
                     node.tokenUsage.total.input += inputTokens;
                     node.tokenUsage.total.output += outputTokens;
