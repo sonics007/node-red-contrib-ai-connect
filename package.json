@@ -1,6 +1,6 @@
 {
   "name": "@sonics007/node-red-contrib-ai-connect",
-  "version": "2.1.1",
+  "version": "2.2.0",
   "description": "Universal Node-RED node for AI services - Perplexity, Claude, Gemini, Grok, DeepSeek, OpenAI | Univerzálny Node-RED node pre AI služby",
   "main": "index.js",
   "keywords": [
