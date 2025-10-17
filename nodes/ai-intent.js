@@ -1,17 +1,18 @@
 module.exports = function(RED) {
     const axios = require('axios');
 
-    function PerplexityIntentNode(config) {
+    function AIIntentNode(config) {
         RED.nodes.createNode(this, config);
         const node = this;
 
         this.config = RED.nodes.getNode(config.config);
+        this.provider = config.provider || 'perplexity';
         this.intents = config.intents || [];
         this.model = config.model || 'sonar';
         this.outputType = config.outputType || 'separate';
 
         if (!this.config) {
-            this.error("Chýba Perplexity konfigurácia");
+            this.error("Chýba AI konfigurácia");
             return;
         }
 
@@ -31,27 +32,9 @@ Odpovedz iba číslom intentu (1-${intents.length}) ktorý najlepšie zodpovedá
 Ak žiadny intent nezodpovedá, odpovedz "0".`;
         }
 
-        node.on('input', async function(msg) {
-            try {
-                node.status({ fill: "blue", shape: "dot", text: "Analyzuje sa intent..." });
-
-                const apiKey = node.config.getApiKey();
-
-                if (!apiKey) {
-                    node.error("Nie je dostupný API key");
-                    node.status({ fill: "red", shape: "ring", text: "Chyba: Žiadny API key" });
-                    return;
-                }
-
-                const userMessage = typeof msg.payload === 'string' ? msg.payload : msg.payload.text;
-
-                if (!userMessage) {
-                    node.error("Chýba správa na analýzu");
-                    return;
-                }
-
-                const prompt = createIntentPrompt(node.intents, userMessage);
-
+        // API handlers for different providers
+        const apiHandlers = {
+            perplexity: async (prompt, apiKey) => {
                 const response = await axios.post(
                     'https://api.perplexity.ai/chat/completions',
                     {
@@ -69,16 +52,157 @@ Ak žiadny intent nezodpovedá, odpovedz "0".`;
                         }
                     }
                 );
+                return response.data.choices[0].message.content.trim();
+            },
 
-                const perplexityResponse = response.data.choices[0].message.content.trim();
-                const intentIndex = parseInt(perplexityResponse);
+            claude: async (prompt, apiKey) => {
+                const response = await axios.post(
+                    'https://api.anthropic.com/v1/messages',
+                    {
+                        model: node.model,
+                        max_tokens: 50,
+                        messages: [{
+                            role: 'user',
+                            content: prompt
+                        }]
+                    },
+                    {
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'x-api-key': apiKey,
+                            'anthropic-version': '2023-06-01'
+                        }
+                    }
+                );
+                return response.data.content[0].text.trim();
+            },
+
+            gemini: async (prompt, apiKey) => {
+                const response = await axios.post(
+                    `https://generativelanguage.googleapis.com/v1beta/models/${node.model}:generateContent?key=${apiKey}`,
+                    {
+                        contents: [{
+                            role: 'user',
+                            parts: [{ text: prompt }]
+                        }],
+                        generationConfig: {
+                            maxOutputTokens: 50
+                        }
+                    },
+                    {
+                        headers: {
+                            'Content-Type': 'application/json'
+                        }
+                    }
+                );
+                return response.data.candidates[0].content.parts[0].text.trim();
+            },
+
+            grok: async (prompt, apiKey) => {
+                const response = await axios.post(
+                    'https://api.x.ai/v1/chat/completions',
+                    {
+                        model: node.model,
+                        max_tokens: 50,
+                        messages: [{
+                            role: 'user',
+                            content: prompt
+                        }]
+                    },
+                    {
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${apiKey}`
+                        }
+                    }
+                );
+                return response.data.choices[0].message.content.trim();
+            },
+
+            deepseek: async (prompt, apiKey) => {
+                const response = await axios.post(
+                    'https://api.deepseek.com/chat/completions',
+                    {
+                        model: node.model,
+                        max_tokens: 50,
+                        messages: [{
+                            role: 'user',
+                            content: prompt
+                        }]
+                    },
+                    {
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${apiKey}`
+                        }
+                    }
+                );
+                return response.data.choices[0].message.content.trim();
+            },
+
+            openai: async (prompt, apiKey) => {
+                const response = await axios.post(
+                    'https://api.openai.com/v1/chat/completions',
+                    {
+                        model: node.model,
+                        max_tokens: 50,
+                        messages: [{
+                            role: 'user',
+                            content: prompt
+                        }]
+                    },
+                    {
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${apiKey}`
+                        }
+                    }
+                );
+                return response.data.choices[0].message.content.trim();
+            }
+        };
+
+        node.on('input', async function(msg) {
+            // Get provider (use override from msg if available)
+            const provider = msg.provider || node.provider;
+
+            try {
+                node.status({ fill: "blue", shape: "dot", text: `Analyzuje sa (${provider})...` });
+
+                const apiKey = node.config.getApiKey(provider);
+
+                if (!apiKey) {
+                    node.error(`Nie je dostupný API key pre ${provider}`);
+                    node.status({ fill: "red", shape: "ring", text: "Chyba: Žiadny API key" });
+                    return;
+                }
+
+                const userMessage = typeof msg.payload === 'string' ? msg.payload : msg.payload.text;
+
+                if (!userMessage) {
+                    node.error("Chýba správa na analýzu");
+                    return;
+                }
+
+                const prompt = createIntentPrompt(node.intents, userMessage);
+
+                // Get API handler for provider
+                const handler = apiHandlers[provider];
+                if (!handler) {
+                    throw new Error(`Nepodporovaný provider: ${provider}`);
+                }
+
+                // Make API request
+                const aiResponse = await handler(prompt, apiKey);
+                const intentIndex = parseInt(aiResponse);
 
                 if (isNaN(intentIndex) || intentIndex < 0 || intentIndex > node.intents.length) {
                     msg.intent = {
                         matched: false,
                         name: 'unknown',
                         confidence: 0,
-                        originalMessage: userMessage
+                        originalMessage: userMessage,
+                        provider: provider
                     };
                     node.status({ fill: "yellow", shape: "ring", text: "Neznámy intent" });
 
@@ -97,7 +221,8 @@ Ak žiadny intent nezodpovedá, odpovedz "0".`;
                         matched: false,
                         name: 'none',
                         confidence: 0,
-                        originalMessage: userMessage
+                        originalMessage: userMessage,
+                        provider: provider
                     };
                     node.status({ fill: "yellow", shape: "ring", text: "Žiadny intent" });
 
@@ -117,7 +242,8 @@ Ak žiadny intent nezodpovedá, odpovedz "0".`;
                     name: matchedIntent.name,
                     description: matchedIntent.description,
                     confidence: 1,
-                    originalMessage: userMessage
+                    originalMessage: userMessage,
+                    provider: provider
                 };
 
                 node.status({ fill: "green", shape: "dot", text: `Intent: ${matchedIntent.name}` });
@@ -135,7 +261,28 @@ Ak žiadny intent nezodpovedá, odpovedz "0".`;
                 }, 3000);
 
             } catch (error) {
-                node.error(`Chyba pri detekcii intentu: ${error.message}`, msg);
+                let errorMessage = error.message;
+
+                // Enhanced error handling for specific providers
+                if (error.response?.data) {
+                    const errorData = error.response.data;
+
+                    if (provider === 'grok' && errorData.error) {
+                        if (errorData.error.includes('credits') || errorData.error.includes('permission')) {
+                            errorMessage = `Grok API: ${errorData.error}`;
+                        }
+                    }
+
+                    if (provider === 'claude' && errorData.error) {
+                        errorMessage = `Claude API: ${errorData.error.message || errorData.error}`;
+                    }
+
+                    if (provider === 'gemini' && errorData.error) {
+                        errorMessage = `Gemini API: ${errorData.error.message || errorData.error}`;
+                    }
+                }
+
+                node.error(`Chyba pri detekcii intentu (${provider}): ${errorMessage}`, msg);
                 node.status({ fill: "red", shape: "ring", text: "Chyba" });
             }
         });
@@ -147,5 +294,5 @@ Ak žiadny intent nezodpovedá, odpovedz "0".`;
         }
     }
 
-    RED.nodes.registerType("ai-intent", PerplexityIntentNode);
+    RED.nodes.registerType("ai-intent", AIIntentNode);
 };

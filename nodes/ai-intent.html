@@ -1,10 +1,11 @@
 <script type="text/javascript">
     RED.nodes.registerType('ai-intent', {
-        category: 'Perplexity AI',
+        category: 'AI Connect',
         color: '#20808d',
         defaults: {
             name: { value: "" },
             config: { value: "", type: "ai-config" },
+            provider: { value: "perplexity" },
             model: { value: "sonar" },
             outputType: { value: "separate" },
             intents: { value: [] }
@@ -13,10 +14,64 @@
         outputs: 1,
         icon: "font-awesome/fa-crosshairs",
         label: function() {
-            return this.name || "Perplexity Intent";
+            return this.name || "AI Intent";
         },
         oneditprepare: function() {
             const node = this;
+
+            // Model options for different providers
+            const modelOptions = {
+                perplexity: [
+                    { value: "sonar", label: "Sonar" },
+                    { value: "sonar-pro", label: "Sonar Pro" }
+                ],
+                claude: [
+                    { value: "claude-3-5-sonnet-20241022", label: "Claude 3.5 Sonnet" },
+                    { value: "claude-3-haiku-20240307", label: "Claude 3 Haiku" }
+                ],
+                gemini: [
+                    { value: "gemini-2.0-flash-exp", label: "Gemini 2.0 Flash" },
+                    { value: "gemini-1.5-pro", label: "Gemini 1.5 Pro" },
+                    { value: "gemini-1.5-flash", label: "Gemini 1.5 Flash" }
+                ],
+                grok: [
+                    { value: "grok-beta", label: "Grok Beta" },
+                    { value: "grok-2-latest", label: "Grok 2" }
+                ],
+                deepseek: [
+                    { value: "deepseek-chat", label: "DeepSeek Chat" }
+                ],
+                openai: [
+                    { value: "gpt-4o", label: "GPT-4o" },
+                    { value: "gpt-4o-mini", label: "GPT-4o Mini" },
+                    { value: "gpt-4-turbo", label: "GPT-4 Turbo" }
+                ]
+            };
+
+            function updateModels() {
+                const provider = $("#node-input-provider").val();
+                const $modelSelect = $("#node-input-model");
+                const currentModel = node.model;
+
+                $modelSelect.empty();
+                const models = modelOptions[provider] || [];
+
+                models.forEach(model => {
+                    $modelSelect.append($('<option></option>')
+                        .attr('value', model.value)
+                        .text(model.label));
+                });
+
+                // Try to restore previous model if it exists for this provider
+                if ($modelSelect.find(`option[value="${currentModel}"]`).length > 0) {
+                    $modelSelect.val(currentModel);
+                } else if (models.length > 0) {
+                    $modelSelect.val(models[0].value);
+                }
+            }
+
+            $("#node-input-provider").on('change', updateModels);
+            updateModels();
 
             $("#node-input-intent-container").css('min-height', '150px').editableList({
                 addItem: function(container, index, data) {
@@ -110,6 +165,18 @@
     </div>
 
     <div class="form-row">
+        <label for="node-input-provider"><i class="fa fa-cloud"></i> AI Provider</label>
+        <select id="node-input-provider">
+            <option value="perplexity">Perplexity</option>
+            <option value="claude">Claude</option>
+            <option value="gemini">Gemini</option>
+            <option value="grok">Grok</option>
+            <option value="deepseek">DeepSeek</option>
+            <option value="openai">OpenAI</option>
+        </select>
+    </div>
+
+    <div class="form-row">
         <label for="node-input-model"><i class="fa fa-microchip"></i> Model</label>
         <select id="node-input-model">
             <option value="sonar">Sonar</option>
@@ -135,12 +202,16 @@
 </script>
 
 <script type="text/html" data-help-name="ai-intent">
-    <p>Node na detekciu intentov (zámerov) v používateľských správach pomocou Perplexity AI.</p>
+    <p>Node na detekciu intentov (zámerov) v používateľských správach pomocou AI.</p>
+
+    <p>Podporuje viacero AI poskytovateľov: Perplexity, Claude, Gemini, Grok, DeepSeek a OpenAI.</p>
 
     <h3>Vstup:</h3>
     <dl class="message-properties">
         <dt>msg.payload <span class="property-type">string</span></dt>
         <dd>Text správy na analýzu</dd>
+        <dt class="optional">msg.provider <span class="property-type">string</span></dt>
+        <dd>Prepísať nakonfigurovaný AI provider (perplexity, claude, gemini, grok, deepseek, openai)</dd>
     </dl>
 
     <h3>Výstupy:</h3>
@@ -155,6 +226,7 @@
         <dd><code>name</code> - názov intentu</dd>
         <dd><code>description</code> - popis intentu</dd>
         <dd><code>confidence</code> - spoľahlivosť (0-1)</dd>
+        <dd><code>provider</code> - použitý AI provider</dd>
     </dl>
 
     <h3>Príklad použitia:</h3>
@@ -162,8 +234,9 @@
     <ul>
         <li><b>greeting:</b> Pozdravy a uvítanie</li>
         <li><b>question:</b> Otázky na informácie</li>
+        <li><b>control_device:</b> Ovládanie zariadení (zapni svetlo, nastav teplotu)</li>
         <li><b>farewell:</b> Rozlúčky</li>
     </ul>
 
-    <p>Node automaticky klasifikuje správu do jedného z týchto intentov pomocou Perplexity AI.</p>
+    <p>Node automaticky klasifikuje správu do jedného z týchto intentov pomocou zvoleného AI providera.</p>
 </script>
